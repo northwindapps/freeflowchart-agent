@@ -1,6 +1,6 @@
 {
   "name": "freeflowchart",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn simple text (FlowScript) into flowchart PNG/PDF, offline. CLI and MCP server for AI agents.",
   "mcpName": "io.github.northwindapps/freeflowchart",
   "keywords": [
@@ -42,7 +42,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
-    "puppeteer": "^23.11.1",
+    "@puppeteer/browsers": "^3.2.6",
+    "puppeteer-core": "^25.16.0",
     "zod": "^3.25.76"
   }
 }

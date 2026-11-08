@@ -52,3 +52,8 @@ test('clean chart has no issues', async () => {
     const out = await r.render('a\nb\nendflow', { scale: 1 });
     assert.deepEqual(out.layout.issues, []);
 });
+
+test('if without else: no-path to next node has no crossings', async () => {
+    const out = await r.render('start\nif ok?\n  then\n    yes\n  endthen\nendif\nendflow', { scale: 1 });
+    assert.deepEqual(out.layout.issues, []);
+});

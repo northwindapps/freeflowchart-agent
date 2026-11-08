@@ -23,9 +23,10 @@ Try the same language interactively at <https://freeflowchart.web.app>.
 
 ## Requirements
 
-Node.js 18 or later. Chrome is downloaded by Puppeteer on install. If that
-download is skipped, an installed Google Chrome is used instead (or run
-`npx puppeteer browsers install chrome`, or set `PUPPETEER_EXECUTABLE_PATH`).
+Node.js 18 or later and Chrome. An installed Google Chrome is used when present.
+Otherwise a headless Chrome is downloaded once on first use into
+`~/.cache/freeflowchart` (override with `FREEFLOWCHART_CACHE_DIR`). To use a
+specific browser, set `PUPPETEER_EXECUTABLE_PATH`.
 
 ## Use with AI agents (MCP)
 

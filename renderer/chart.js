@@ -18,18 +18,24 @@ window.addEventListener('DOMContentLoaded', function () {
     function gy(L) { return (laneY[L] !== undefined ? laneY[L] : L * ROW_H + sectionBaseY) + TOP_BUFFER; }
     function advance(L) { curX[L] = gx(L) + NODE_W + H_GAP; }
 
+    // Exits that leave downward (a diamond's bottom "no" path) or come from a lower
+    // row enter the next node from below, so the line doesn't cut through the
+    // branch nodes sitting between them on the way to the node's left side.
+    function exitEntrySide(ex, L) {
+        if (ex.fromSide === 'bottom') return 'bottom';
+        if (ex.y !== undefined && ex.y > gy(L)) return 'bottom';
+        return 'left';
+    }
+
     function connectToPrev(L, id) {
         // Diamond "no" chain exits: drain onto the very next node (connects chained ifs)
         pendingNoPathExits.forEach(function (ex) {
-            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: 'left' });
+            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: exitEntrySide(ex, L) });
         });
         pendingNoPathExits = [];
 
         pendingExits.forEach(function (ex) {
-            // A branch exit from a lower row enters from below, so its line doesn't
-            // cut through the other branch's nodes on the way to this node's left side.
-            var toSide = (ex.y !== undefined && ex.y > gy(L)) ? 'bottom' : 'left';
-            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: toSide });
+            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: exitEntrySide(ex, L) });
         });
         pendingExits = [];
 
