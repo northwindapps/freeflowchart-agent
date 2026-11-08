@@ -36,3 +36,9 @@ test('keyword at line start splits off the label', () => {
     assert.deepEqual(tokenize('if ok?').map((t) => t.trim()).filter(Boolean), ['if', 'ok?']);
     assert.deepEqual(tokenize('none of these').map((t) => t.trim()).filter(Boolean), ['none', 'of these']);
 });
+
+test('tracks source lines', async () => {
+    const { tokenizeWithLines } = await import('../lib/tokenize.js');
+    const t = tokenizeWithLines('start\n\nif ok?\n  then\nx').filter((t) => t.text.trim());
+    assert.deepEqual(t.map((x) => [x.text.trim(), x.line]), [['start', 1], ['if', 3], ['ok?', 3], ['then', 4], ['x', 5]]);
+});

@@ -22,6 +22,10 @@ server.registerTool(
         description:
             'Render a FlowScript flowchart to PNG or PDF. PNG output is returned as an image so you can ' +
             'check the result; PDF is saved to a file. Pass output_path to save either format to disk.\n\n' +
+            'The result also includes a JSON layout: every node with its box (x, y, width, height in CSS px ' +
+            'from the image top-left; multiply by scale for image pixels), the script line it came from, ' +
+            'the edges, and detected issues ("overlap", "edge_crosses_node") with the script lines involved. ' +
+            'Use the issues to revise the script and render again.\n\n' +
             SPEC,
         inputSchema: {
             script: z.string().min(1).describe('FlowScript source, one statement per line'),
@@ -30,9 +34,10 @@ server.registerTool(
                 'Absolute file path to save the output to. Required to keep a PDF in a specific place; ' +
                 'if omitted for PDF, a temp file path is returned.'),
             scale: z.number().min(1).max(4).default(2).describe('Pixel ratio (resolution multiplier)'),
+            include_layout: z.boolean().default(true).describe('Include the JSON layout in the result'),
         },
     },
-    async ({ script, format, output_path, scale }) => {
+    async ({ script, format, output_path, scale, include_layout }) => {
         try {
             const result = await renderer.render(script, { format, scale });
             const content = [];
@@ -52,7 +57,12 @@ server.registerTool(
             const lines = [`Rendered ${format.toUpperCase()}, ${result.width}x${result.height} CSS px at ${scale}x.`];
             if (savedTo) lines.push(`Saved to ${savedTo}`);
             for (const w of result.warnings) lines.push(`Renderer warning: ${w}`);
+            const issues = result.layout.issues.length;
+            lines.push(issues ? `${issues} layout issue(s) detected; see "issues" in the layout.` : 'No layout issues detected.');
             content.push({ type: 'text', text: lines.join('\n') });
+            if (include_layout) {
+                content.push({ type: 'text', text: JSON.stringify(result.layout) });
+            }
             return { content };
         } catch (err) {
             return { isError: true, content: [{ type: 'text', text: `Render failed: ${err.message}` }] };

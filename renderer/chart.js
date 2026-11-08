@@ -26,7 +26,10 @@ window.addEventListener('DOMContentLoaded', function () {
         pendingNoPathExits = [];
 
         pendingExits.forEach(function (ex) {
-            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: 'left' });
+            // A branch exit from a lower row enters from below, so its line doesn't
+            // cut through the other branch's nodes on the way to this node's left side.
+            var toSide = (ex.y !== undefined && ex.y > gy(L)) ? 'bottom' : 'left';
+            autoConns.push({ fromId: ex.fromId, fromSide: ex.fromSide, toId: id, toSide: toSide });
         });
         pendingExits = [];
 
@@ -119,7 +122,7 @@ window.addEventListener('DOMContentLoaded', function () {
                     }
                     if (nextTok === 'else') {
                         // else follows: then-exit reconnects at post-endif node
-                        pendingExits.push({ fromId: thenExitId, fromSide: 'right' });
+                        pendingExits.push({ fromId: thenExitId, fromSide: 'right', y: gy(L + 1) });
                         curX[L] = Math.max(gx(L), gx(L + 1) || 0);
                     } else {
                         // No else: yes-branch is a dead end; only diamond "no" path continues
@@ -138,7 +141,7 @@ window.addEventListener('DOMContentLoaded', function () {
             }
             case 'endelse':
                 if (lastNodeId[L + 1] !== undefined) {
-                    pendingExits.push({ fromId: lastNodeId[L + 1], fromSide: 'right' });
+                    pendingExits.push({ fromId: lastNodeId[L + 1], fromSide: 'right', y: gy(L + 1) });
                     lastNodeId[L + 1] = undefined;
                 }
                 // Merge saved then-exits back so both branches connect to post-endif node
@@ -157,7 +160,7 @@ window.addEventListener('DOMContentLoaded', function () {
                 pendingBranch = null;
                 curX[L] = Math.max(gx(L), gx(L + 1) || 0);
                 // When top-level endif leaves no pending connections, start a new flow section
-                if (L === 0 && pendingExits.length === 0) {
+                if (L === 0 && pendingExits.length === 0 && pendingNoPathExits.length === 0) {
                     sectionBaseY = maxPlacedY + 220;
                     Object.keys(laneY).forEach(function(k) { delete laneY[k]; });
                     curX[0] = 0;
@@ -191,11 +194,12 @@ window.addEventListener('DOMContentLoaded', function () {
                     var dbLabel = fmDb[1].trim();
                     var fileLabel = fmDb[2].trim();
                     var colX = gx(L);
+                    var spot = attachedFileSpot(colX);
                     mkProcDb(L, colX, dbLabel, i);
                     advance(L);
                     var fileId = '__f' + i;
-                    mkProcFile(L, colX, fileLabel !== 'none' ? fileLabel : '', fileId, true, gy(L) - 180);
-                    autoConns.push({ fromId: fileId, fromSide: 'bottom', toId: i, toSide: 'top' });
+                    mkProcFile(L, spot.x, fileLabel !== 'none' ? fileLabel : '', fileId, true, gy(L) - spot.up);
+                    autoConns.push({ fromId: fileId, fromSide: 'bottom', toId: i, toSide: spot.toSide });
                 } else {
                     mkProcDb(L, gx(L), trimmedDb, i);
                     advance(L);
@@ -216,13 +220,14 @@ window.addEventListener('DOMContentLoaded', function () {
                         var pLabel = um2 ? um2[1].trim() : procPart;
                         var pUrl   = (um2 && um2[2] !== 'none') ? um2[2].trim() : '';
                         var colX = gx(L);
+                        var spot = attachedFileSpot(colX);
                         // Process first so connectToPrev chains prev → process
                         mkProcDoc(L, colX, pLabel, pUrl, i);
                         advance(L);
-                        // File placed above process: same column X, shifted up
+                        // File placed above process (or beside the incoming line, see attachedFileSpot)
                         var fileId = '__f' + i;
-                        mkProcFile(L, colX, fileLabel !== 'none' ? fileLabel : '', fileId, true, gy(L) - 180);
-                        autoConns.push({ fromId: fileId, fromSide: 'bottom', toId: i, toSide: 'top' });
+                        mkProcFile(L, spot.x, fileLabel !== 'none' ? fileLabel : '', fileId, true, gy(L) - spot.up);
+                        autoConns.push({ fromId: fileId, fromSide: 'bottom', toId: i, toSide: spot.toSide });
                     } else {
                         var um = trimmed.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
                         var nodeLabel = um ? um[1].trim() : trimmed;
@@ -258,6 +263,18 @@ window.addEventListener('DOMContentLoaded', function () {
         place(li, L, px);
         li.addEventListener('click', makeHandler(id));
         connectToPrev(L, id);
+    }
+
+    // Where to put a file attached with "<- file(...)". Normally straight above the
+    // node; but when the node is entered from the top (first node of a downward
+    // branch) that spot is on the incoming line, so shift it beside the line.
+    function attachedFileSpot(colX) {
+        var fromTop = pendingBranch && pendingBranch.toSide === 'top';
+        if (!fromTop) return { x: colX, up: 180, toSide: 'top' };
+        // Slightly lower than usual so it clears the row above.
+        var shift = NODE_W / 2 + 40;
+        return colX - shift >= 0 ? { x: colX - shift, up: 165, toSide: 'left' }
+                                 : { x: colX + shift, up: 165, toSide: 'right' };
     }
 
     function mkProcFile(L, px, label, id, skipConn, overrideY) {

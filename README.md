@@ -27,7 +27,8 @@ endflow" -o out.png                             # inline script
 node bin/cli.js --syntax                        # print the language reference
 ```
 
-Options: `-f png|pdf`, `-s <scale 1-4>` (pixel ratio, default 2). Without `-o`,
+Options: `-f png|pdf`, `-s <scale 1-4>` (pixel ratio, default 2),
+`-l <file.json|->` (also write the layout, see below). Without `-o`,
 the image is written to stdout when stdout is piped. After `npm link`, the same
 commands are available as `freeflowchart`.
 
@@ -60,11 +61,38 @@ The server exposes one tool, `render_flowchart`:
 | `format` | `png` \| `pdf` | `png` | |
 | `output_path` | string | none | Absolute path to save the file |
 | `scale` | 1–4 | 2 | Resolution multiplier |
+| `include_layout` | boolean | `true` | Include the JSON layout (see below) |
 
 PNG results come back as an image the agent can look at. PDFs are saved to
 `output_path`, or to a temp file whose path is returned. The full language
 reference ([SPEC.md](SPEC.md)) is in the tool description, so agents can write
 valid scripts without extra setup.
+
+## Layout output
+
+Every render also produces a layout. The MCP tool returns it alongside the
+image, and the CLI writes it with `--layout`:
+
+```json
+{
+  "width": 880, "height": 940, "units": "css-px",
+  "nodes": [
+    { "id": "0", "type": "decision", "label": "member?", "x": 100, "y": 35, "width": 220, "height": 131, "line": 1 },
+    { "id": "3", "type": "process", "label": "apply discount", "x": 100, "y": 350, "width": 220, "height": 140, "line": 3 },
+    { "id": "__f7", "type": "file", "label": "orders.csv", "x": 420, "y": 590, "width": 220, "height": 140, "line": 7, "attachedTo": "7" }
+  ],
+  "edges": [ { "from": "0", "to": "3", "fromSide": "bottom", "toSide": "top" } ],
+  "issues": [
+    { "type": "edge_crosses_node", "edge": { "from": "0", "to": "6" }, "node": "3", "lines": [1, 6, 3] }
+  ]
+}
+```
+
+- Coordinates are CSS px from the image's top-left. Multiply by `scale` to get image pixels.
+- `type` is one of `process`, `decision`, `end`, `database` or `file`.
+- `line` is the 1-based script line that produced the node, so an agent knows which line to edit.
+- `issues` lists detected problems: `overlap` (two node boxes intersect) and
+  `edge_crosses_node` (a connection line passes through a node it doesn't connect).
 
 ## Library
 

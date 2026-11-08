@@ -13,11 +13,13 @@ Options:
   -e, --eval <script>   Use this script text instead of a file.
   -f, --format <fmt>    png | pdf (default: from --output extension, else png)
   -s, --scale <n>       Pixel ratio, 1-4 (default 2)
+  -l, --layout <file>   Also write the layout as JSON: node boxes (with source line
+                        numbers), edges and detected issues. Use "-" for stdout.
       --syntax          Print the FlowScript language reference and exit.
   -h, --help            Show this help.`;
 
 function parseArgs(argv) {
-    const opts = { input: null, output: null, script: null, format: null, scale: 2 };
+    const opts = { input: null, output: null, script: null, format: null, scale: 2, layout: null };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         const val = () => {
@@ -29,6 +31,7 @@ function parseArgs(argv) {
             case '-e': case '--eval': opts.script = val(); break;
             case '-f': case '--format': opts.format = val().toLowerCase(); break;
             case '-s': case '--scale': opts.scale = Number(val()); break;
+            case '-l': case '--layout': opts.layout = val(); break;
             case '--syntax': opts.syntax = true; break;
             case '-h': case '--help': opts.help = true; break;
             default:
@@ -72,6 +75,7 @@ async function main() {
     format = format || 'png';
     if (!FORMATS.includes(format)) fail(`Unsupported format "${format}" (use png or pdf)`);
     if (!(opts.scale >= 1 && opts.scale <= 4)) fail('--scale must be between 1 and 4');
+    if (!opts.output && opts.layout === '-') fail('--layout - needs -o <file> for the image');
     if (!opts.output && process.stdout.isTTY) fail('Refusing to write binary to a terminal; pass -o <file>');
 
     const result = await render(script, { format, scale: opts.scale });
@@ -83,6 +87,15 @@ async function main() {
         process.stderr.write(`Wrote ${opts.output} (${result.width}x${result.height}, ${format})\n`);
     } else {
         process.stdout.write(result.buffer);
+    }
+
+    if (opts.layout) {
+        const json = JSON.stringify(result.layout, null, 2) + '\n';
+        if (opts.layout === '-') process.stdout.write(json);
+        else {
+            fs.writeFileSync(opts.layout, json);
+            process.stderr.write(`Wrote ${opts.layout} (${result.layout.nodes.length} nodes, ${result.layout.issues.length} issues)\n`);
+        }
     }
 }
 
