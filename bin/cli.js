@@ -4,6 +4,7 @@ import path from 'node:path';
 import { render, FORMATS } from '../lib/render.js';
 
 const USAGE = `Usage: freeflowchart [input.txt | -] -o <out.png|out.pdf> [options]
+       freeflowchart mcp        Run as an MCP server (stdio) for AI agents
 
 Renders a FlowScript file to PNG or PDF. Reads stdin when input is "-" or omitted.
 
@@ -55,6 +56,11 @@ async function readStdin() {
 }
 
 async function main() {
+    // "freeflowchart mcp" runs the MCP server (stdio), so one package covers both.
+    if (process.argv[2] === 'mcp') {
+        await import('./mcp.js');
+        return;
+    }
     const opts = parseArgs(process.argv.slice(2));
     if (opts.help) { process.stdout.write(USAGE + '\n'); return; }
     if (opts.syntax) {

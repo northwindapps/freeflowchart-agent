@@ -1,57 +1,72 @@
-# freeflowchart-agent
+# freeflowchart
 
-Render [FlowScript](SPEC.md) flowcharts to PNG or PDF without a browser window.
-It works from the command line and as an MCP server for AI agents (Claude Code,
-Claude Desktop, Cursor, …). Rendering is fully offline: it uses a bundled copy of
-the freeflowchart web app's renderer in headless Chrome.
+Turn plain text into a flowchart image. Write steps and decisions in
+[FlowScript](https://freeflowchart.web.app), a tiny line-based language, and get
+a PNG or PDF back. It works from the command line and as an MCP server, so AI
+agents (Claude Code, Claude Desktop, Cursor, …) can draw flowcharts and check
+the result. Rendering runs locally in headless Chrome, with no network calls.
 
-## Install
-
-```sh
-npm install
+```
+start
+if member?
+  then
+    apply discount
+  endthen
+else
+    regular price
+  endelse
+endif
+endflow done
 ```
 
-Puppeteer normally downloads its own Chrome during install. If that step was
-skipped (npm `allowScripts`, CI), the renderer falls back to an installed
-Google Chrome. Other options are `npx puppeteer browsers install chrome` or
-setting `PUPPETEER_EXECUTABLE_PATH`.
+Try the same language interactively at <https://freeflowchart.web.app>.
 
-## CLI
+## Requirements
 
-```sh
-node bin/cli.js chart.txt -o chart.png          # format from extension
-node bin/cli.js chart.txt -o chart.pdf
-cat chart.txt | node bin/cli.js -o chart.png    # stdin
-node bin/cli.js -e "start
-endflow" -o out.png                             # inline script
-node bin/cli.js --syntax                        # print the language reference
-```
+Node.js 18 or later. Chrome is downloaded by Puppeteer on install. If that
+download is skipped, an installed Google Chrome is used instead (or run
+`npx puppeteer browsers install chrome`, or set `PUPPETEER_EXECUTABLE_PATH`).
 
-Options: `-f png|pdf`, `-s <scale 1-4>` (pixel ratio, default 2),
-`-l <file.json|->` (also write the layout, see below). Without `-o`,
-the image is written to stdout when stdout is piped. After `npm link`, the same
-commands are available as `freeflowchart`.
-
-## MCP server
+## Use with AI agents (MCP)
 
 Claude Code:
 
 ```sh
-claude mcp add freeflowchart -- node /absolute/path/to/freeflowchart-agent/bin/mcp.js
+claude mcp add freeflowchart -- npx -y freeflowchart mcp
 ```
 
-Claude Desktop / other clients (`mcpServers` config):
+Claude Desktop, Cursor and other clients (`mcpServers` config):
 
 ```json
 {
   "mcpServers": {
     "freeflowchart": {
-      "command": "node",
-      "args": ["/absolute/path/to/freeflowchart-agent/bin/mcp.js"]
+      "command": "npx",
+      "args": ["-y", "freeflowchart", "mcp"]
     }
   }
 }
 ```
+
+The agent learns the language from the tool description, so no setup or
+prompting is needed. Just ask it to draw a flowchart.
+
+## Command line
+
+```sh
+npx freeflowchart chart.txt -o chart.png          # format from extension
+npx freeflowchart chart.txt -o chart.pdf
+cat chart.txt | npx freeflowchart -o chart.png    # stdin
+npx freeflowchart -e "start
+endflow" -o out.png                               # inline script
+npx freeflowchart --syntax                        # print the language reference
+```
+
+Options: `-f png|pdf`, `-s <scale 1-4>` (pixel ratio, default 2),
+`-l <file.json|->` (also write the layout, see below). Without `-o`,
+the image is written to stdout when stdout is piped.
+
+## MCP tool
 
 The server exposes one tool, `render_flowchart`:
 
@@ -65,7 +80,7 @@ The server exposes one tool, `render_flowchart`:
 
 PNG results come back as an image the agent can look at. PDFs are saved to
 `output_path`, or to a temp file whose path is returned. The full language
-reference ([SPEC.md](SPEC.md)) is in the tool description, so agents can write
+reference (`npx freeflowchart --syntax`) is in the tool description, so agents can write
 valid scripts without extra setup.
 
 ## Layout output
@@ -97,7 +112,7 @@ image, and the CLI writes it with `--layout`:
 ## Library
 
 ```js
-import { render, createRenderer } from 'freeflowchart-agent';
+import { render, createRenderer } from 'freeflowchart';
 
 const { buffer, width, height } = await render(script, { format: 'png', scale: 2 });
 
@@ -107,7 +122,9 @@ await r.render(a); await r.render(b);
 await r.close();
 ```
 
-## Updating the renderer
+## Development (from source)
+
+### Updating the renderer
 
 `renderer/` is a copy of `chart.js`, `connect.js` and `style.css` from the
 freeflowchart web app. `renderer/SOURCE_COMMIT` records which commit it came from.
@@ -121,7 +138,7 @@ npm test
 `lib/tokenize.js` is a port of `getValue()` in the web app's `main.js`. The tests
 check that it matches the original whenever `../freeflowchart` is present.
 
-## Tests
+### Tests
 
 ```sh
 npm test

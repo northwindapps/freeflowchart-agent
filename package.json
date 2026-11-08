@@ -1,8 +1,21 @@
 {
-  "name": "freeflowchart-agent",
+  "name": "freeflowchart",
   "version": "0.1.0",
-  "private": true,
-  "description": "Render FlowScript flowcharts to PNG/PDF from the command line or an MCP server, offline.",
+  "description": "Turn simple text (FlowScript) into flowchart PNG/PDF, offline. CLI and MCP server for AI agents.",
+  "mcpName": "io.github.northwindapps/freeflowchart",
+  "keywords": [
+    "flowchart",
+    "diagram",
+    "mcp",
+    "mcp-server",
+    "ai-agent",
+    "png",
+    "pdf",
+    "cli"
+  ],
+  "homepage": "https://freeflowchart.web.app",
+  "author": "Yujin Yano",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "freeflowchart": "bin/cli.js",
@@ -12,6 +25,14 @@
     ".": "./lib/render.js",
     "./tokenize": "./lib/tokenize.js"
   },
+  "files": [
+    "bin/",
+    "lib/",
+    "renderer/",
+    "SPEC.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "sync-renderer": "scripts/sync-renderer.sh",
     "test": "node --test test/*.test.js"
@@ -19,7 +40,6 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
     "puppeteer": "^23.11.1",
