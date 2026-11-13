@@ -2,7 +2,7 @@
 
 Turn plain text into a flowchart image. Write steps and decisions in
 [FlowScript](https://freeflowchart.web.app), a tiny line-based language, and get
-a PNG or PDF back. It works from the command line and as an MCP server, so AI
+a PNG, PDF or Markdown document back. It works from the command line and as an MCP server, so AI
 agents (Claude Code, Claude Desktop, Cursor, …) can draw flowcharts and check
 the result. Rendering runs locally in headless Chrome, with no network calls.
 
@@ -60,10 +60,12 @@ npx freeflowchart chart.txt -o chart.pdf
 cat chart.txt | npx freeflowchart -o chart.png    # stdin
 npx freeflowchart -e "start
 endflow" -o out.png                               # inline script
+npx freeflowchart chart.txt -o chart.md -t "Checkout"  # Markdown doc + chart.png
+npx freeflowchart chart.md -o chart.png           # re-render from an exported .md
 npx freeflowchart --syntax                        # print the language reference
 ```
 
-Options: `-f png|pdf`, `-s <scale 1-4>` (pixel ratio, default 2),
+Options: `-f png|pdf|md`, `-t <title>` (heading for md output), `-s <scale 1-4>` (pixel ratio, default 2),
 `-l <file.json|->` (also write the layout, see below). Without `-o`,
 the image is written to stdout when stdout is piped.
 
@@ -78,11 +80,46 @@ The server exposes one tool, `render_flowchart`:
 | `output_path` | string | none | Absolute path to save the file |
 | `scale` | 1–4 | 2 | Resolution multiplier |
 | `include_layout` | boolean | `true` | Include the JSON layout (see below) |
+| `markdown_path` | string | none | Absolute path of a `.md` file to also write (see below) |
+| `title` | string | file name | Heading for the Markdown file |
 
 PNG results come back as an image the agent can look at. PDFs are saved to
 `output_path`, or to a temp file whose path is returned. The full language
 reference (`npx freeflowchart --syntax`) is in the tool description, so agents can write
 valid scripts without extra setup.
+
+## Markdown export
+
+`-o chart.md` (CLI) or `markdown_path` (MCP) writes a Markdown document next to
+the PNG, ready to drop into a repo or docs folder:
+
+````markdown
+# Checkout flow
+
+![Checkout flow](checkout.png)
+
+## Steps
+
+1. start
+2. **Decision:** member?
+   - **Yes:**
+     1. apply discount
+   - **No:**
+     1. regular price
+3. End: done
+
+## FlowScript source
+
+```flowscript
+start
+if member?
+...
+```
+````
+
+The step list is generated from the script's structure, so it always matches the
+chart. The FlowScript block keeps the chart editable: you or an agent can change it
+and re-render with `npx freeflowchart chart.md -o chart.png`.
 
 ## Layout output
 

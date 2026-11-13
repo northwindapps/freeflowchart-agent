@@ -1,7 +1,7 @@
 {
   "name": "freeflowchart",
-  "version": "0.1.1",
-  "description": "Turn simple text (FlowScript) into flowchart PNG/PDF, offline. CLI and MCP server for AI agents.",
+  "version": "0.2.0",
+  "description": "Turn simple text (FlowScript) into flowchart PNG/PDF/Markdown, offline. CLI and MCP server for AI agents.",
   "mcpName": "io.github.northwindapps/freeflowchart",
   "keywords": [
     "flowchart",
@@ -11,6 +11,7 @@
     "ai-agent",
     "png",
     "pdf",
+    "markdown",
     "cli"
   ],
   "homepage": "https://freeflowchart.web.app",

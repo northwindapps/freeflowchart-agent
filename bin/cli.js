@@ -2,18 +2,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { render, FORMATS } from '../lib/render.js';
+import { toMarkdown, extractScript } from '../lib/markdown.js';
 
-const USAGE = `Usage: freeflowchart [input.txt | -] -o <out.png|out.pdf> [options]
+const USAGE = `Usage: freeflowchart [input.txt | input.md | -] -o <out.png|out.pdf|out.md> [options]
        freeflowchart mcp        Run as an MCP server (stdio) for AI agents
 
 Renders a FlowScript file to PNG or PDF. Reads stdin when input is "-" or omitted.
+An input .md file (from a previous md export) is read from its flowscript code block.
 
 Options:
   -o, --output <file>   Output file. Format comes from the extension unless --format is set.
                         Omit to write to stdout (only when stdout is not a terminal).
   -e, --eval <script>   Use this script text instead of a file.
-  -f, --format <fmt>    png | pdf (default: from --output extension, else png)
+  -f, --format <fmt>    png | pdf | md (default: from --output extension, else png)
+                        md writes a Markdown file (image, step outline, FlowScript
+                        source) plus the PNG next to it.
   -s, --scale <n>       Pixel ratio, 1-4 (default 2)
+  -t, --title <text>    Heading for md output (default: the file name)
   -l, --layout <file>   Also write the layout as JSON: node boxes (with source line
                         numbers), edges and detected issues. Use "-" for stdout.
       --syntax          Print the FlowScript language reference and exit.
@@ -33,6 +38,7 @@ function parseArgs(argv) {
             case '-f': case '--format': opts.format = val().toLowerCase(); break;
             case '-s': case '--scale': opts.scale = Number(val()); break;
             case '-l': case '--layout': opts.layout = val(); break;
+            case '-t': case '--title': opts.title = val(); break;
             case '--syntax': opts.syntax = true; break;
             case '-h': case '--help': opts.help = true; break;
             default:
@@ -71,7 +77,12 @@ async function main() {
 
     let script = opts.script;
     if (script == null) {
-        if (opts.input && opts.input !== '-') script = fs.readFileSync(opts.input, 'utf8');
+        if (opts.input && opts.input !== '-') {
+            script = fs.readFileSync(opts.input, 'utf8');
+            if (/\.(md|markdown)$/i.test(opts.input)) {
+                try { script = extractScript(script); } catch (err) { fail(`${opts.input}: ${err.message}`); }
+            }
+        }
         else if (process.stdin.isTTY) fail('No input: pass a file, "-" for stdin, or -e "<script>"');
         else script = await readStdin();
     }
@@ -79,15 +90,29 @@ async function main() {
     let format = opts.format;
     if (!format && opts.output) format = path.extname(opts.output).slice(1).toLowerCase() || null;
     format = format || 'png';
-    if (!FORMATS.includes(format)) fail(`Unsupported format "${format}" (use png or pdf)`);
+    if (format === 'markdown') format = 'md';
+    if (format === 'md') {
+        if (!opts.output || path.extname(opts.output).toLowerCase() !== '.md') fail('md output needs -o <file.md>');
+        if (opts.layout === '-') fail('--layout - cannot be combined with md output');
+    } else if (!FORMATS.includes(format)) fail(`Unsupported format "${format}" (use png, pdf or md)`);
     if (!(opts.scale >= 1 && opts.scale <= 4)) fail('--scale must be between 1 and 4');
     if (!opts.output && opts.layout === '-') fail('--layout - needs -o <file> for the image');
     if (!opts.output && process.stdout.isTTY) fail('Refusing to write binary to a terminal; pass -o <file>');
 
-    const result = await render(script, { format, scale: opts.scale });
+    const result = await render(script, { format: format === 'md' ? 'png' : format, scale: opts.scale });
     for (const w of result.warnings) process.stderr.write(`warning: renderer error: ${w}\n`);
 
-    if (opts.output) {
+    if (format === 'md') {
+        const mdPath = path.resolve(opts.output);
+        const pngPath = mdPath.replace(/\.md$/i, '.png');
+        fs.mkdirSync(path.dirname(mdPath), { recursive: true });
+        fs.writeFileSync(pngPath, result.buffer);
+        fs.writeFileSync(mdPath, toMarkdown(script, {
+            title: opts.title || path.basename(mdPath, path.extname(mdPath)),
+            imagePath: path.basename(pngPath),
+        }));
+        process.stderr.write(`Wrote ${opts.output} and ${path.join(path.dirname(opts.output), path.basename(pngPath))} (${result.width}x${result.height})\n`);
+    } else if (opts.output) {
         fs.mkdirSync(path.dirname(path.resolve(opts.output)), { recursive: true });
         fs.writeFileSync(opts.output, result.buffer);
         process.stderr.write(`Wrote ${opts.output} (${result.width}x${result.height}, ${format})\n`);

@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.northwindapps/freeflowchart",
-  "description": "Render text-based flowcharts (FlowScript) to PNG/PDF with layout feedback, offline.",
-  "version": "0.1.1",
+  "description": "Render text-based flowcharts (FlowScript) to PNG/PDF/Markdown with layout feedback, offline.",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "freeflowchart",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },

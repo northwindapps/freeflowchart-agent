@@ -8,6 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createRenderer } from '../lib/render.js';
+import { toMarkdown } from '../lib/markdown.js';
 
 const SPEC = fs.readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -26,6 +27,9 @@ server.registerTool(
             'from the image top-left; multiply by scale for image pixels), the script line it came from, ' +
             'the edges, and detected issues ("overlap", "edge_crosses_node") with the script lines involved. ' +
             'Use the issues to revise the script and render again.\n\n' +
+            'Pass markdown_path to also save a Markdown file documenting the chart: the PNG image, a ' +
+            'step-by-step outline of the flow, and the FlowScript source (so it can be edited and ' +
+            're-rendered later). The PNG is saved next to it unless output_path is a .png.\n\n' +
             SPEC,
         inputSchema: {
             script: z.string().min(1).describe('FlowScript source, one statement per line'),
@@ -35,13 +39,34 @@ server.registerTool(
                 'if omitted for PDF, a temp file path is returned.'),
             scale: z.number().min(1).max(4).default(2).describe('Pixel ratio (resolution multiplier)'),
             include_layout: z.boolean().default(true).describe('Include the JSON layout in the result'),
+            markdown_path: z.string().optional().describe(
+                'Absolute path of a .md file to write: image, step outline and FlowScript source.'),
+            title: z.string().optional().describe('Heading for the Markdown file (default: its file name)'),
         },
     },
-    async ({ script, format, output_path, scale, include_layout }) => {
+    async ({ script, format, output_path, scale, include_layout, markdown_path, title }) => {
         try {
             const result = await renderer.render(script, { format, scale });
             const content = [];
             let savedTo = null;
+            const extraLines = [];
+
+            if (markdown_path) {
+                const mdPath = path.resolve(markdown_path);
+                const pngPath = format === 'png' && output_path
+                    ? path.resolve(output_path)
+                    : mdPath.replace(/\.(md|markdown)$/i, '') + '.png';
+                const png = format === 'png' ? result : await renderer.render(script, { format: 'png', scale });
+                fs.mkdirSync(path.dirname(pngPath), { recursive: true });
+                fs.writeFileSync(pngPath, png.buffer);
+                const md = toMarkdown(script, {
+                    title: title || path.basename(mdPath).replace(/\.(md|markdown)$/i, ''),
+                    imagePath: path.relative(path.dirname(mdPath), pngPath),
+                });
+                fs.mkdirSync(path.dirname(mdPath), { recursive: true });
+                fs.writeFileSync(mdPath, md);
+                extraLines.push(`Saved Markdown to ${mdPath}`, `Saved PNG to ${pngPath}`);
+            }
 
             if (output_path || format === 'pdf') {
                 savedTo = output_path
@@ -56,6 +81,7 @@ server.registerTool(
 
             const lines = [`Rendered ${format.toUpperCase()}, ${result.width}x${result.height} CSS px at ${scale}x.`];
             if (savedTo) lines.push(`Saved to ${savedTo}`);
+            lines.push(...extraLines.filter((l) => !(savedTo && l.endsWith(savedTo))));
             for (const w of result.warnings) lines.push(`Renderer warning: ${w}`);
             const issues = result.layout.issues.length;
             lines.push(issues ? `${issues} layout issue(s) detected; see "issues" in the layout.` : 'No layout issues detected.');
