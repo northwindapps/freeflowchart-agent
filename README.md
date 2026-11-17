@@ -83,6 +83,12 @@ The server exposes one tool, `render_flowchart`:
 | `markdown_path` | string | none | Absolute path of a `.md` file to also write (see below) |
 | `title` | string | file name | Heading for the Markdown file |
 
+**Safe file writes.** Paths may come from an agent acting on untrusted content, so the
+MCP server only writes chart files: the name must end in `.png`, `.pdf` or `.md` to match
+the format, hidden (`.`-prefixed) and system folders are refused (symlinks included),
+and an existing file is only replaced if freeflowchart created it. Any ordinary folder
+works. The CLI writes where you tell it.
+
 PNG results come back as an image the agent can look at. PDFs are saved to
 `output_path`, or to a temp file whose path is returned. The full language
 reference (`npx freeflowchart --syntax`) is in the tool description, so agents can write

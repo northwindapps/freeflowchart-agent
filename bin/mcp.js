@@ -9,6 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { createRenderer } from '../lib/render.js';
 import { toMarkdown } from '../lib/markdown.js';
+import { checkOutputPath } from '../lib/safepath.js';
 
 const SPEC = fs.readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -30,6 +31,8 @@ server.registerTool(
             'Pass markdown_path to also save a Markdown file documenting the chart: the PNG image, a ' +
             'step-by-step outline of the flow, and the FlowScript source (so it can be edited and ' +
             're-rendered later). The PNG is saved next to it unless output_path is a .png.\n\n' +
+            'Saved files must end in .png, .pdf or .md (matching the format), cannot be in hidden or system ' +
+            'folders, and an existing file is only replaced if freeflowchart created it.\n\n' +
             SPEC,
         inputSchema: {
             script: z.string().min(1).describe('FlowScript source, one statement per line'),
@@ -46,16 +49,22 @@ server.registerTool(
     },
     async ({ script, format, output_path, scale, include_layout, markdown_path, title }) => {
         try {
+            // Validate every target before rendering or writing anything.
+            const outPath = output_path ? checkOutputPath(output_path, format) : null;
+            const mdPath = markdown_path ? checkOutputPath(markdown_path, 'md') : null;
+            let pngPath = null;
+            if (mdPath) {
+                pngPath = format === 'png' && outPath
+                    ? outPath
+                    : checkOutputPath(mdPath.replace(/\.(md|markdown)$/i, '') + '.png', 'png');
+            }
+
             const result = await renderer.render(script, { format, scale });
             const content = [];
             let savedTo = null;
             const extraLines = [];
 
-            if (markdown_path) {
-                const mdPath = path.resolve(markdown_path);
-                const pngPath = format === 'png' && output_path
-                    ? path.resolve(output_path)
-                    : mdPath.replace(/\.(md|markdown)$/i, '') + '.png';
+            if (mdPath) {
                 const png = format === 'png' ? result : await renderer.render(script, { format: 'png', scale });
                 fs.mkdirSync(path.dirname(pngPath), { recursive: true });
                 fs.writeFileSync(pngPath, png.buffer);
@@ -68,10 +77,8 @@ server.registerTool(
                 extraLines.push(`Saved Markdown to ${mdPath}`, `Saved PNG to ${pngPath}`);
             }
 
-            if (output_path || format === 'pdf') {
-                savedTo = output_path
-                    ? path.resolve(output_path)
-                    : path.join(os.tmpdir(), `flowchart-${Date.now()}.pdf`);
+            if (outPath || format === 'pdf') {
+                savedTo = outPath || path.join(os.tmpdir(), `flowchart-${Date.now()}.pdf`);
                 fs.mkdirSync(path.dirname(savedTo), { recursive: true });
                 fs.writeFileSync(savedTo, result.buffer);
             }
@@ -91,7 +98,7 @@ server.registerTool(
             }
             return { content };
         } catch (err) {
-            return { isError: true, content: [{ type: 'text', text: `Render failed: ${err.message}` }] };
+            return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
         }
     },
 );
