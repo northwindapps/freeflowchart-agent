@@ -1,7 +1,7 @@
 # freeflowchart
 
 Turn plain text into a flowchart image. Write steps and decisions in
-[FlowScript](https://freeflowchart.web.app), a tiny line-based language, and get
+[FlowScript](https://flowscript-fe2b2.web.app), a tiny line-based language, and get
 a PNG, PDF or Markdown document back. It works from the command line and as an MCP server, so AI
 agents (Claude Code, Claude Desktop, Cursor, …) can draw flowcharts and check
 the result. Rendering runs locally in headless Chrome, with no network calls.
@@ -19,7 +19,7 @@ endif
 endflow done
 ```
 
-Try the same language interactively at <https://freeflowchart.web.app>.
+Try the same language interactively at <https://flowscript-fe2b2.web.app>.
 
 ## Requirements
 

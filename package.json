@@ -1,6 +1,6 @@
 {
   "name": "freeflowchart",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Turn simple text (FlowScript) into flowchart PNG/PDF/Markdown, offline. CLI and MCP server for AI agents.",
   "mcpName": "io.github.northwindapps/freeflowchart",
   "keywords": [
@@ -14,7 +14,7 @@
     "markdown",
     "cli"
   ],
-  "homepage": "https://freeflowchart.web.app",
+  "homepage": "https://flowscript-fe2b2.web.app",
   "author": "Yujin Yano",
   "license": "MIT",
   "type": "module",
