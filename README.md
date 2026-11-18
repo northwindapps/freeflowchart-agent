@@ -65,7 +65,7 @@ npx freeflowchart chart.md -o chart.png           # re-render from an exported .
 npx freeflowchart --syntax                        # print the language reference
 ```
 
-Options: `-f png|pdf|md`, `-t <title>` (heading for md output), `-s <scale 1-4>` (pixel ratio, default 2),
+Options: `-f png|pdf|md`, `-t <title>` (heading for md output), `-p <n>` (only page n), `-s <scale 1-4>` (pixel ratio, default 2),
 `-l <file.json|->` (also write the layout, see below). Without `-o`,
 the image is written to stdout when stdout is piped.
 
@@ -93,6 +93,17 @@ PNG results come back as an image the agent can look at. PDFs are saved to
 `output_path`, or to a temp file whose path is returned. The full language
 reference (`npx freeflowchart --syntax`) is in the tool description, so agents can write
 valid scripts without extra setup.
+
+## Pages
+
+A top-level `pagebreak <name>` line starts a new, independent page (like spreadsheet
+sheets), e.g. Plan A / Plan B / Plan C, or a long flow split into readable parts:
+
+- PNG: one image per page, saved as `chart-1.png`, `chart-2.png`, … (the MCP tool returns
+  each page as its own image)
+- PDF: one file, one page per chart page, each sized to its chart
+- Markdown: one section per page with its image and steps
+- `--page <n>` (CLI) renders only page n
 
 ## Markdown export
 

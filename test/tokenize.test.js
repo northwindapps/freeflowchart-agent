@@ -26,6 +26,7 @@ const SAMPLES = [
     'start\ndb Product Catalog <- file(products.xlsx)\nselect item\ncheckout\nendflow done',
     'if2 member?\n  then\n    apply discount\n  endthen\nendif\nif2 coupon?\n  then\n    apply coupon\n  endthen\nendif\nprocess payment\nendflow',
     'none of the above\nfile spec.pdf\nendprocess\n\n   indented   label  \nendflow',
+    'pagebreak Plan A\nstart\nendflow\npagebreak\nnext\npagebreak Plan C\nx\nendflow\npagebreak',
 ];
 
 test('matches the web app tokenizer', { skip: !haveOriginal && 'freeflowchart checkout not found' }, () => {

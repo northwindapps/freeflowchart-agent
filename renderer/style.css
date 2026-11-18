@@ -487,3 +487,33 @@ li.d.if2 .y { right: 65px;  top: auto; bottom: 75px; }
 li.d.if2 .n { right: -32px; bottom: auto; top: 116px; }
 li.d.if2 .diamond          { border-bottom-color: #a8d0ff; }
 li.d.if2 .diamond::after   { border-top-color: #a8d0ff; }
+/* --- sheet tabs (pagebreak pages) --- */
+body.has-sheet-tabs { padding-bottom: 48px; }
+.sheet-tabs {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    gap: 2px;
+    padding: 0 12px;
+    background: #f1f1f1;
+    border-top: 1px solid #ccc;
+    overflow-x: auto;
+    z-index: 1000;
+}
+.sheet-tab {
+    flex: none;
+    padding: 6px 16px;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background: #e4e4e4;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+}
+.sheet-tab.active {
+    background: #fff;
+    font-weight: 600;
+    margin-top: -1px;
+    border-top: 1px solid #fff;
+}

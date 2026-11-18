@@ -67,3 +67,24 @@ test('script containing a code fence still round-trips', () => {
 test('extractScript rejects files without a flowscript block', () => {
     assert.throws(() => extractScript('# hi\n\n```js\nx\n```\n'), /No ```flowscript/);
 });
+
+test('splitPages matches the renderer rules', async () => {
+    const { splitPages } = await import('../lib/markdown.js');
+    const s = 'pagebreak Plan A\na\nif x?\nthen\npagebreak no\nb\nendthen\nendif\npagebreak\nnone\npagebreak\nc';
+    assert.deepEqual(splitPages(s).map((p) => p.name), ['Plan A', 'Page 2']);
+    assert.deepEqual(splitPages('a\nb').map((p) => p.name), ['Page 1']);
+});
+
+test('multi-page markdown has a section and image per page, and round-trips', () => {
+    const s = 'pagebreak Plan A\na\nendflow\npagebreak Plan B\nb';
+    const md = toMarkdown(s, { title: 'Plans', imagePaths: ['p-1.png', 'p-2.png'] });
+    assert.match(md, /## Plan A\n\n!\[Plan A\]\(p-1\.png\)\n\n1\. a\n2\. End/);
+    assert.match(md, /## Plan B\n\n!\[Plan B\]\(p-2\.png\)\n\n1\. b/);
+    assert.equal(extractScript(md), s);
+});
+
+test('pageFile numbers only multi-page output', async () => {
+    const { pageFile } = await import('../lib/markdown.js');
+    assert.equal(pageFile('/a/chart.png', 1, 1), '/a/chart.png');
+    assert.equal(pageFile('/a/chart.png', 2, 3), '/a/chart-2.png');
+});

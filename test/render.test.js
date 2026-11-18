@@ -57,3 +57,36 @@ test('if without else: no-path to next node has no crossings', async () => {
     const out = await r.render('start\nif ok?\n  then\n    yes\n  endthen\nendif\nendflow', { scale: 1 });
     assert.deepEqual(out.layout.issues, []);
 });
+
+const PAGES = [
+    'pagebreak Plan A', 'start', 'if ok?', '  then', '    pagebreak Ignored', '    yes', '  endthen', 'endif', 'endflow done',
+    'pagebreak Plan B', 'alpha', 'endflow',
+    'pagebreak', 'none',
+    'pagebreak', 'gamma',
+].join('\n');
+
+test('pagebreak splits into independent pages', async () => {
+    const out = await r.render(PAGES, { scale: 1 });
+    assert.deepEqual(out.pages.map((p) => [p.page, p.name]), [[1, 'Plan A'], [2, 'Plan B'], [3, 'Page 3']]);
+    assert.equal(out.pageCount, 3);
+    const labels = (p) => p.layout.nodes.map((n) => `${n.label}@${n.line}`);
+    assert.deepEqual(labels(out.pages[0]), ['start@2', 'ok?@3', 'yes@6', 'done@9']);
+    assert.deepEqual(labels(out.pages[1]), ['alpha@11', '@12']);
+    assert.deepEqual(labels(out.pages[2]), ['gamma@16']);
+    for (const p of out.pages) assert.deepEqual(p.warnings, []);
+});
+
+test('single page and multi-page PDF', async () => {
+    const one = await r.render(PAGES, { scale: 1, page: 2 });
+    assert.equal(one.pages.length, 1);
+    assert.equal(one.name, 'Plan B');
+    const pdf = await r.render(PAGES, { scale: 1, format: 'pdf' });
+    const boxes = [...pdf.buffer.toString('latin1').matchAll(/MediaBox\s*\[([^\]]+)\]/g)];
+    assert.equal(boxes.length, 3);
+});
+
+test('script without pagebreak is one page', async () => {
+    const out = await r.render('a\nendflow', { scale: 1 });
+    assert.equal(out.pages.length, 1);
+    assert.equal(out.pageCount, 1);
+});

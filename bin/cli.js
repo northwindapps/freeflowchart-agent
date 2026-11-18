@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { render, FORMATS } from '../lib/render.js';
-import { toMarkdown, extractScript } from '../lib/markdown.js';
+import { toMarkdown, extractScript, pageFile } from '../lib/markdown.js';
 
 const USAGE = `Usage: freeflowchart [input.txt | input.md | -] -o <out.png|out.pdf|out.md> [options]
        freeflowchart mcp        Run as an MCP server (stdio) for AI agents
@@ -18,6 +18,9 @@ Options:
                         md writes a Markdown file (image, step outline, FlowScript
                         source) plus the PNG next to it.
   -s, --scale <n>       Pixel ratio, 1-4 (default 2)
+  -p, --page <n>        Render only page n of a multi-page script (pagebreak lines).
+                        Otherwise every page is rendered: PNG pages are written as
+                        out-1.png, out-2.png, …; PDF gets one page per chart page.
   -t, --title <text>    Heading for md output (default: the file name)
   -l, --layout <file>   Also write the layout as JSON: node boxes (with source line
                         numbers), edges and detected issues. Use "-" for stdout.
@@ -39,6 +42,7 @@ function parseArgs(argv) {
             case '-s': case '--scale': opts.scale = Number(val()); break;
             case '-l': case '--layout': opts.layout = val(); break;
             case '-t': case '--title': opts.title = val(); break;
+            case '-p': case '--page': opts.page = Number(val()); break;
             case '--syntax': opts.syntax = true; break;
             case '-h': case '--help': opts.help = true; break;
             default:
@@ -96,36 +100,54 @@ async function main() {
         if (opts.layout === '-') fail('--layout - cannot be combined with md output');
     } else if (!FORMATS.includes(format)) fail(`Unsupported format "${format}" (use png, pdf or md)`);
     if (!(opts.scale >= 1 && opts.scale <= 4)) fail('--scale must be between 1 and 4');
+    if (opts.page !== undefined && !(Number.isInteger(opts.page) && opts.page >= 1)) fail('--page must be 1 or more');
     if (!opts.output && opts.layout === '-') fail('--layout - needs -o <file> for the image');
     if (!opts.output && process.stdout.isTTY) fail('Refusing to write binary to a terminal; pass -o <file>');
 
-    const result = await render(script, { format: format === 'md' ? 'png' : format, scale: opts.scale });
-    for (const w of result.warnings) process.stderr.write(`warning: renderer error: ${w}\n`);
+    const result = await render(script, { format: format === 'md' ? 'png' : format, scale: opts.scale, page: opts.page });
+    if (opts.page && opts.page > result.pageCount) fail(`--page ${opts.page}: the script has ${result.pageCount} page(s)`);
+    const pages = result.pages;
+    const n = pages.length;
+    for (const pg of pages) for (const w of pg.warnings) process.stderr.write(`warning: renderer error (page ${pg.page}): ${w}\n`);
+    const size = (pg) => `${pg.width}x${pg.height}`;
+    const writePngs = (base) => pages.map((pg, i) => {
+        const file = pageFile(base, i + 1, n);
+        fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+        fs.writeFileSync(file, pg.buffer);
+        process.stderr.write(`Wrote ${file} (${size(pg)}${n > 1 ? `, page ${pg.page}: ${pg.name}` : ''})\n`);
+        return file;
+    });
 
     if (format === 'md') {
-        const mdPath = path.resolve(opts.output);
-        const pngPath = mdPath.replace(/\.md$/i, '.png');
-        fs.mkdirSync(path.dirname(mdPath), { recursive: true });
-        fs.writeFileSync(pngPath, result.buffer);
-        fs.writeFileSync(mdPath, toMarkdown(script, {
-            title: opts.title || path.basename(mdPath, path.extname(mdPath)),
-            imagePath: path.basename(pngPath),
+        const mdFile = opts.output;
+        const pngFiles = writePngs(mdFile.replace(/\.md$/i, '.png'));
+        fs.writeFileSync(mdFile, toMarkdown(script, {
+            title: opts.title || path.basename(mdFile, path.extname(mdFile)),
+            imagePaths: pngFiles.map((f) => path.relative(path.dirname(path.resolve(mdFile)), path.resolve(f))),
         }));
-        process.stderr.write(`Wrote ${opts.output} and ${path.join(path.dirname(opts.output), path.basename(pngPath))} (${result.width}x${result.height})\n`);
+        process.stderr.write(`Wrote ${mdFile}\n`);
+    } else if (opts.output && format === 'png') {
+        writePngs(opts.output);
     } else if (opts.output) {
         fs.mkdirSync(path.dirname(path.resolve(opts.output)), { recursive: true });
         fs.writeFileSync(opts.output, result.buffer);
-        process.stderr.write(`Wrote ${opts.output} (${result.width}x${result.height}, ${format})\n`);
+        process.stderr.write(`Wrote ${opts.output} (${n} page${n > 1 ? 's' : ''}, pdf)\n`);
     } else {
+        if (format === 'png' && n > 1) fail(`The script has ${n} pages: pass -o <file.png> or --page <n>`);
         process.stdout.write(result.buffer);
     }
 
     if (opts.layout) {
-        const json = JSON.stringify(result.layout, null, 2) + '\n';
+        const layout = n > 1
+            ? { pages: pages.map((pg) => ({ page: pg.page, name: pg.name, ...pg.layout })) }
+            : result.layout;
+        const json = JSON.stringify(layout, null, 2) + '\n';
         if (opts.layout === '-') process.stdout.write(json);
         else {
             fs.writeFileSync(opts.layout, json);
-            process.stderr.write(`Wrote ${opts.layout} (${result.layout.nodes.length} nodes, ${result.layout.issues.length} issues)\n`);
+            const nodes = pages.reduce((a, pg) => a + pg.layout.nodes.length, 0);
+            const issues = pages.reduce((a, pg) => a + pg.layout.issues.length, 0);
+            process.stderr.write(`Wrote ${opts.layout} (${nodes} nodes, ${issues} issues)\n`);
         }
     }
 }

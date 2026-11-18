@@ -48,7 +48,44 @@ window.addEventListener('DOMContentLoaded', function () {
         lastNodeId[L] = id;
     }
 
-    var tokens = values.filter(function (v) { return v && v.replace(/\s/g, ''); });
+    // Non-blank tokens. isPageName[i]: token i is the text after "pagebreak" on the same line.
+    var tokens = [], isPageName = [];
+    for (var r = 0; r < values.length; r++) {
+        if (!(values[r] && values[r].replace(/\s/g, ''))) continue;
+        tokens.push(values[r]);
+        isPageName.push(r > 0 && values[r - 1] === 'pagebreak');
+    }
+
+    // Pages (sheets): a top-level "pagebreak <name>" line starts a new, independent
+    // chart. Only the selected page (?page=N, 1-based) is drawn. Tokens of other
+    // pages become null, so node ids stay the global token index.
+    var pageOfTok = [], pageNames = [''], pageUsed = [false], pg = 0, depth = 0;
+    for (var i = 0; i < tokens.length; i++) {
+        var t = tokens[i];
+        if (isPageName[i] && tokens[i - 1] === 'pagebreak') { pageOfTok[i] = -1; continue; }
+        if (t === 'pagebreak') {
+            pageOfTok[i] = -1;
+            if (depth > 0) { console.warn('pagebreak inside an if block is ignored'); continue; }
+            pg++;
+            pageNames[pg] = isPageName[i + 1] ? tokens[i + 1].trim() : '';
+            pageUsed[pg] = false;
+            continue;
+        }
+        if (t === 'if' || t === 'if2') depth++;
+        if (t === 'endif') depth = Math.max(0, depth - 1);
+        pageOfTok[i] = pg;
+        if (t.trim() !== 'none' && t.trim() !== 'endprocess') pageUsed[pg] = true;
+    }
+    var visiblePages = [];
+    for (var p = 0; p <= pg; p++) if (pageUsed[p]) visiblePages.push(p);
+    var reqPage = parseInt(new URLSearchParams(window.location.search).get('page'), 10) || 1;
+    var activeIdx = Math.min(Math.max(reqPage, 1), Math.max(visiblePages.length, 1)) - 1;
+    var activePage = visiblePages.length ? visiblePages[activeIdx] : 0;
+    for (var i = 0; i < tokens.length; i++) if (pageOfTok[i] !== activePage) tokens[i] = null;
+
+    window._pages = visiblePages.map(function (p, k) { return pageNames[p] || 'Page ' + (k + 1); });
+    window._page = activeIdx;
+    if (window._pages.length > 1) buildSheetTabs(window._pages, activeIdx);
 
     var laneOf = [], lane = 0;
     for (var i = 0; i < tokens.length; i++) {
@@ -353,6 +390,27 @@ window.addEventListener('DOMContentLoaded', function () {
             if (urlEl  && a) a.href      = urlEl.value;
             if (nameEl && a) a.innerHTML = nameEl.value || 'document:none';
         };
+    }
+
+    // Excel-like sheet tabs; each tab reloads the chart with ?page=N.
+    function buildSheetTabs(names, active) {
+        var nav = document.createElement('nav');
+        nav.className = 'sheet-tabs';
+        names.forEach(function (name, k) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'sheet-tab' + (k === active ? ' active' : '');
+            b.textContent = name;
+            b.addEventListener('click', function () {
+                if (k === active) return;
+                var u = new URL(window.location.href);
+                u.searchParams.set('page', k + 1);
+                window.location.href = u.toString();
+            });
+            nav.appendChild(b);
+        });
+        document.body.appendChild(nav);
+        document.body.classList.add('has-sheet-tabs');
     }
 
     document.addEventListener('click', function (e) {

@@ -32,11 +32,20 @@ FlowScript is a line-based text format that renders to a left-to-right flowchart
 | `file <name>` | Standalone document node |
 | `none` | Spacer: no node. Use it to leave a branch empty |
 | `endprocess` | No-op marker (accepted for compatibility) |
+| `pagebreak <name>` | Start a new, independent page (sheet). Name optional (default "Page N") |
 
 ## Multiple flows in one chart
 
 When every branch of an `if/else` ends in `endflow`, the next top-level line starts a new
 flow below the previous one. A plain text line before it works as that flow's title box.
+
+## Pages
+
+A top-level `pagebreak <name>` line starts a new, independent page, like a sheet in a
+spreadsheet: use it for alternatives (Plan A / Plan B) or to split a long flow so each
+image stays readable. Each page renders as its own image (PDF: one page each). A
+`pagebreak` inside an `if` block is ignored. Pages are not connected automatically; to
+show a flow continues, end it with e.g. `endflow continues on Payment`.
 
 ## Examples
 
@@ -95,4 +104,15 @@ endif
 Payment Flow
 charge card
 endflow payment done
+```
+
+Pages:
+```
+pagebreak Plan A
+build in-house
+endflow
+pagebreak Plan B
+buy SaaS
+configure
+endflow live
 ```

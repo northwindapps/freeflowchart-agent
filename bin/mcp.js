@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createRenderer } from '../lib/render.js';
-import { toMarkdown } from '../lib/markdown.js';
+import { toMarkdown, pageFile } from '../lib/markdown.js';
 import { checkOutputPath } from '../lib/safepath.js';
 
 const SPEC = fs.readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8');
@@ -31,6 +31,9 @@ server.registerTool(
             'Pass markdown_path to also save a Markdown file documenting the chart: the PNG image, a ' +
             'step-by-step outline of the flow, and the FlowScript source (so it can be edited and ' +
             're-rendered later). The PNG is saved next to it unless output_path is a .png.\n\n' +
+            'Scripts with several pages ("pagebreak <name>" lines) render one image per page; files are ' +
+            'saved as name-1.png, name-2.png, …, a PDF gets one page per chart page, and the Markdown ' +
+            'gets one section per page. The layout then has a "pages" array.\n\n' +
             'Saved files must end in .png, .pdf or .md (matching the format), cannot be in hidden or system ' +
             'folders, and an existing file is only replaced if freeflowchart created it.\n\n' +
             SPEC,
@@ -49,52 +52,60 @@ server.registerTool(
     },
     async ({ script, format, output_path, scale, include_layout, markdown_path, title }) => {
         try {
-            // Validate every target before rendering or writing anything.
-            const outPath = output_path ? checkOutputPath(output_path, format) : null;
-            const mdPath = markdown_path ? checkOutputPath(markdown_path, 'md') : null;
-            let pngPath = null;
-            if (mdPath) {
-                pngPath = format === 'png' && outPath
-                    ? outPath
-                    : checkOutputPath(mdPath.replace(/\.(md|markdown)$/i, '') + '.png', 'png');
-            }
-
             const result = await renderer.render(script, { format, scale });
-            const content = [];
-            let savedTo = null;
-            const extraLines = [];
+            const pages = result.pages;
+            const n = pages.length;
 
-            if (mdPath) {
-                const png = format === 'png' ? result : await renderer.render(script, { format: 'png', scale });
-                fs.mkdirSync(path.dirname(pngPath), { recursive: true });
-                fs.writeFileSync(pngPath, png.buffer);
+            // Work out and validate every target before writing anything.
+            const writes = []; // [absPath, buffer|string, label]
+            let outPath = output_path ? checkOutputPath(output_path, format) : null;
+            if (!outPath && format === 'pdf') outPath = path.join(os.tmpdir(), `flowchart-${Date.now()}.pdf`);
+            if (outPath && format === 'pdf') writes.push([outPath, result.buffer, `PDF (${n} page${n > 1 ? 's' : ''})`]);
+            let pngPaths = null;
+            if (outPath && format === 'png') {
+                pngPaths = pages.map((_, i) => checkOutputPath(pageFile(outPath, i + 1, n), 'png'));
+            }
+            if (markdown_path) {
+                const mdPath = checkOutputPath(markdown_path, 'md');
+                if (!pngPaths) {
+                    const base = mdPath.replace(/\.(md|markdown)$/i, '') + '.png';
+                    pngPaths = pages.map((_, i) => checkOutputPath(pageFile(base, i + 1, n), 'png'));
+                }
                 const md = toMarkdown(script, {
                     title: title || path.basename(mdPath).replace(/\.(md|markdown)$/i, ''),
-                    imagePath: path.relative(path.dirname(mdPath), pngPath),
+                    imagePaths: pngPaths.map((p) => path.relative(path.dirname(mdPath), p)),
                 });
-                fs.mkdirSync(path.dirname(mdPath), { recursive: true });
-                fs.writeFileSync(mdPath, md);
-                extraLines.push(`Saved Markdown to ${mdPath}`, `Saved PNG to ${pngPath}`);
+                writes.push([mdPath, md, 'Markdown']);
+            }
+            if (pngPaths) pages.forEach((pg, i) => writes.push([pngPaths[i], pg.buffer, n > 1 ? `PNG page ${i + 1}` : 'PNG']));
+
+            for (const [file, data] of writes) {
+                fs.mkdirSync(path.dirname(file), { recursive: true });
+                fs.writeFileSync(file, data);
             }
 
-            if (outPath || format === 'pdf') {
-                savedTo = outPath || path.join(os.tmpdir(), `flowchart-${Date.now()}.pdf`);
-                fs.mkdirSync(path.dirname(savedTo), { recursive: true });
-                fs.writeFileSync(savedTo, result.buffer);
+            const content = [];
+            const lines = [`Rendered ${n} page${n > 1 ? 's' : ''} as ${format.toUpperCase()} at ${scale}x.`];
+            for (const [file, , label] of writes) lines.push(`Saved ${label} to ${file}`);
+            let issues = 0;
+            for (const pg of pages) {
+                for (const w of pg.warnings) lines.push(`Renderer warning (page ${pg.page}): ${w}`);
+                issues += pg.layout.issues.length;
             }
-            if (format === 'png') {
-                content.push({ type: 'image', data: result.buffer.toString('base64'), mimeType: 'image/png' });
-            }
-
-            const lines = [`Rendered ${format.toUpperCase()}, ${result.width}x${result.height} CSS px at ${scale}x.`];
-            if (savedTo) lines.push(`Saved to ${savedTo}`);
-            lines.push(...extraLines.filter((l) => !(savedTo && l.endsWith(savedTo))));
-            for (const w of result.warnings) lines.push(`Renderer warning: ${w}`);
-            const issues = result.layout.issues.length;
             lines.push(issues ? `${issues} layout issue(s) detected; see "issues" in the layout.` : 'No layout issues detected.');
             content.push({ type: 'text', text: lines.join('\n') });
+
+            if (format === 'png') {
+                for (const pg of pages) {
+                    if (n > 1) content.push({ type: 'text', text: `Page ${pg.page}: ${pg.name} (${pg.width}x${pg.height} CSS px)` });
+                    content.push({ type: 'image', data: pg.buffer.toString('base64'), mimeType: 'image/png' });
+                }
+            }
             if (include_layout) {
-                content.push({ type: 'text', text: JSON.stringify(result.layout) });
+                const layout = n > 1
+                    ? { pages: pages.map((pg) => ({ page: pg.page, name: pg.name, ...pg.layout })) }
+                    : result.layout;
+                content.push({ type: 'text', text: JSON.stringify(layout) });
             }
             return { content };
         } catch (err) {
