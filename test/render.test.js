@@ -1,6 +1,8 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRenderer } from '../lib/render.js';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRenderer, isRendererFile } from '../lib/render.js';
 
 const r = createRenderer();
 after(() => r.close());
@@ -89,4 +91,25 @@ test('script without pagebreak is one page', async () => {
     const out = await r.render('a\nendflow', { scale: 1 });
     assert.equal(out.pages.length, 1);
     assert.equal(out.pageCount, 1);
+});
+
+test('only the bundled renderer files may load (no local file reads via labels)', () => {
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer');
+    const url = (p) => pathToFileURL(p).href;
+    for (const f of ['render.html', 'chart.js', 'connect.js', 'style.css']) {
+        assert.ok(isRendererFile(url(path.join(dir, f)) + '?page=2'), f);
+    }
+    for (const u of [
+        url(path.join(dir, '..', 'package.json')), url(dir) + '/', url(path.join(dir, 'SOURCE_COMMIT')),
+        url(dir) + '/../package.json', url(dir) + '/%2e%2e/package.json', 'file:///etc/passwd',
+        'file://host/share/x', 'data:text/html,<p>x</p>', 'https://example.com/a.png', 'not a url',
+    ]) {
+        assert.equal(isRendererFile(u), false, u);
+    }
+});
+
+test('a label embedding a local file still renders, without the file', async () => {
+    const out = await r.render('start\n<iframe src="file:///etc/hosts"></iframe>\n<img src="file:///etc/hosts">\nendflow',
+        { format: 'png', scale: 1 });
+    assert.equal(out.buffer.subarray(1, 4).toString(), 'PNG');
 });
